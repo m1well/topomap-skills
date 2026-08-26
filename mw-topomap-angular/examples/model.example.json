@@ -1,0 +1,615 @@
+{
+  "meta": {
+    "title": "acme-workspace",
+    "preset": "angular",
+    "language": "en",
+    "generated": "hand-written example",
+    "notes": "nx monorepo: one app, four libraries"
+  },
+  "modules": [
+    {
+      "id": "app-shell",
+      "name": "apps/acme",
+      "path": "apps/acme",
+      "description": "scope:app · type:app - shell, routing, interceptors"
+    },
+    {
+      "id": "orders",
+      "name": "@acme/orders",
+      "path": "packages/orders",
+      "description": "scope:orders · type:feature"
+    },
+    {
+      "id": "customers",
+      "name": "@acme/customers",
+      "path": "packages/customers",
+      "description": "scope:customers · type:feature"
+    },
+    {
+      "id": "data",
+      "name": "@acme/data",
+      "path": "packages/shared/data-access",
+      "description": "scope:shared · type:data-access"
+    },
+    {
+      "id": "ui",
+      "name": "@acme/ui",
+      "path": "packages/shared/ui",
+      "description": "scope:shared · type:ui"
+    },
+    {
+      "id": "external",
+      "name": "external systems",
+      "description": "what an http edge points at - not part of the workspace"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "appRoutes",
+      "module": "app-shell",
+      "name": "app.routes",
+      "stereotype": "route",
+      "file": "apps/acme/src/app/app.routes.ts",
+      "summary": "Top level routing. Every feature is lazy - the shell never imports a feature library directly.",
+      "members": [
+        {
+          "name": "orders",
+          "signature": "{ path: 'orders', loadChildren: () => import('@acme/orders') }",
+          "doc": "Lazy, so the orders bundle only loads when someone goes there."
+        },
+        {
+          "name": "customers",
+          "signature": "{ path: 'customers', loadChildren: () => import('@acme/customers') }",
+          "doc": "Same for customers."
+        },
+        {
+          "name": "**",
+          "signature": "{ path: '**', redirectTo: 'orders' }",
+          "doc": "Unknown paths land on the order list."
+        }
+      ]
+    },
+    {
+      "id": "authGuard",
+      "module": "app-shell",
+      "name": "authGuard",
+      "stereotype": "guard",
+      "summary": "CanActivateFn in front of every feature route. Sends unauthenticated users to the login.",
+      "members": [
+        {
+          "name": "authGuard",
+          "signature": "authGuard: CanActivateFn",
+          "doc": "Reads the session signal; returns a UrlTree instead of false so the redirect is one step."
+        }
+      ]
+    },
+    {
+      "id": "authInterceptor",
+      "module": "app-shell",
+      "name": "authInterceptor",
+      "stereotype": "interceptor",
+      "summary": "Adds the bearer token to every outgoing request and retries once on 401.",
+      "members": [
+        {
+          "name": "authInterceptor",
+          "signature": "authInterceptor: HttpInterceptorFn",
+          "doc": "Skips requests to the public endpoints."
+        }
+      ]
+    },
+    {
+      "id": "OrderListPage",
+      "module": "orders",
+      "name": "OrderListPage",
+      "stereotype": "page",
+      "file": "packages/orders/src/lib/pages/order-list/order-list.ts",
+      "summary": "Route target for /orders. Owns the filter and hands it to the state, renders nothing itself.",
+      "members": [
+        {
+          "name": "query",
+          "signature": "query = signal('')",
+          "doc": "The search box, debounced in the template."
+        },
+        {
+          "name": "status",
+          "signature": "status = signal<OrderStatus|null>(null)",
+          "doc": "Filter chip, null means all."
+        },
+        {
+          "name": "orders",
+          "signature": "orders = computed(() => state.filtered(query(), status()))",
+          "doc": "What the table gets."
+        }
+      ]
+    },
+    {
+      "id": "OrderTable",
+      "module": "orders",
+      "name": "OrderTable",
+      "stereotype": "organism",
+      "file": "packages/orders/src/lib/organisms/order-table/order-table.ts",
+      "summary": "The table itself - dumb. Takes rows, reports what was clicked.",
+      "members": [
+        {
+          "name": "orders",
+          "signature": "orders = input.required<Order[]>()",
+          "doc": "The rows to render."
+        },
+        {
+          "name": "busy",
+          "signature": "busy = input(false)",
+          "doc": "Shows the skeleton while the resource reloads."
+        },
+        {
+          "name": "open",
+          "signature": "open = output<OrderId>()",
+          "doc": "Fires when a row is clicked."
+        },
+        {
+          "name": "cancel",
+          "signature": "cancel = output<OrderId>()",
+          "doc": "Fires after the confirm dialog, not before."
+        }
+      ]
+    },
+    {
+      "id": "OrderState",
+      "module": "orders",
+      "name": "OrderState",
+      "stereotype": "state",
+      "file": "packages/orders/src/lib/state/order-state.ts",
+      "summary": "The one place order data lives. Everything below the page reads from here.",
+      "members": [
+        {
+          "name": "orders",
+          "signature": "orders = rxResource({ params: () => tenant.id(), stream: ... })",
+          "doc": "Reloads on its own whenever the tenant signal changes."
+        },
+        {
+          "name": "filtered",
+          "signature": "filtered(query, status): Signal<Order[]>",
+          "doc": "Client side filter over the loaded page."
+        },
+        {
+          "name": "cancel",
+          "signature": "cancel(id: OrderId): void",
+          "doc": "Optimistic: flips the row, then calls the api, reloads on error."
+        }
+      ]
+    },
+    {
+      "id": "CustomerPickerPage",
+      "module": "customers",
+      "name": "CustomerPickerPage",
+      "stereotype": "page",
+      "summary": "Route target for /customers. Also reachable as a dialog from the order form.",
+      "members": [
+        {
+          "name": "selected",
+          "signature": "selected = model<CustomerId|null>(null)",
+          "doc": "Two way, because the dialog writes back into the caller."
+        }
+      ]
+    },
+    {
+      "id": "CustomerState",
+      "module": "customers",
+      "name": "CustomerState",
+      "stereotype": "state",
+      "summary": "Customer list and the currently selected one.",
+      "members": [
+        {
+          "name": "customers",
+          "signature": "customers = rxResource({ stream: () => api.list() })",
+          "doc": "Loaded once per session."
+        },
+        {
+          "name": "byId",
+          "signature": "byId = computed(() => new Map(...))",
+          "doc": "Lookup for the order table's customer column."
+        }
+      ]
+    },
+    {
+      "id": "OrderApi",
+      "module": "data",
+      "name": "OrderApi",
+      "stereotype": "api",
+      "file": "packages/shared/data-access/src/lib/api-orders.ts",
+      "summary": "HTTP access to the order endpoints. No state, no caching - that is the state service's job.",
+      "members": [
+        {
+          "name": "list",
+          "signature": "list(tenantId: string): Observable<Page<Order>>",
+          "http": "GET /api/orders",
+          "doc": "Returns a page."
+        },
+        {
+          "name": "cancel",
+          "signature": "cancel(id: OrderId): Observable<void>",
+          "http": "POST /api/orders/{id}/cancel",
+          "doc": "409 when the order already shipped."
+        }
+      ]
+    },
+    {
+      "id": "CustomerApi",
+      "module": "data",
+      "name": "CustomerApi",
+      "stereotype": "api",
+      "summary": "HTTP access to customers.",
+      "members": [
+        {
+          "name": "list",
+          "signature": "list(): Observable<Customer[]>",
+          "http": "GET /api/customers",
+          "doc": "All customers of the tenant."
+        }
+      ]
+    },
+    {
+      "id": "Order",
+      "module": "data",
+      "name": "Order",
+      "stereotype": "model",
+      "summary": "The order as the API returns it. Dates arrive as ISO strings and stay that way.",
+      "members": [
+        {
+          "name": "id",
+          "signature": "id: OrderId",
+          "doc": ""
+        },
+        {
+          "name": "status",
+          "signature": "status: OrderStatus",
+          "doc": "OPEN | SHIPPED | CANCELLED"
+        },
+        {
+          "name": "customerId",
+          "signature": "customerId: CustomerId",
+          "doc": ""
+        },
+        {
+          "name": "total",
+          "signature": "total: Money",
+          "doc": "Cents, never a float."
+        }
+      ]
+    },
+    {
+      "id": "Backend",
+      "module": "external",
+      "name": "acme-backend",
+      "stereotype": "client",
+      "summary": "The rest api the workspace talks to. One node per system, not one per endpoint - it is here so the calls that leave the browser have an arrow.",
+      "members": [
+        {
+          "name": "/api",
+          "signature": "https://api.acme.io",
+          "doc": "Bearer token, added by the interceptor."
+        }
+      ]
+    },
+    {
+      "id": "DataTable",
+      "module": "ui",
+      "name": "DataTable",
+      "stereotype": "molecule",
+      "summary": "Generic table shell: sorting, empty state, skeleton rows. Knows nothing about orders.",
+      "members": [
+        {
+          "name": "rows",
+          "signature": "rows = input.required<T[]>()",
+          "doc": ""
+        },
+        {
+          "name": "sort",
+          "signature": "sort = model<Sort|null>(null)",
+          "doc": "Two way so the caller can persist it."
+        }
+      ]
+    },
+    {
+      "id": "PageHeader",
+      "module": "ui",
+      "name": "PageHeader",
+      "stereotype": "template",
+      "summary": "Title, subtitle and the action slot every page uses.",
+      "members": [
+        {
+          "name": "title",
+          "signature": "title = input.required<string>()",
+          "doc": ""
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "appRoutes",
+      "to": "authGuard",
+      "kind": "config",
+      "label": "guards every feature route"
+    },
+    {
+      "id": "e2",
+      "from": "appRoutes",
+      "to": "OrderListPage",
+      "kind": "config",
+      "label": "lazy loads /orders"
+    },
+    {
+      "id": "e3",
+      "from": "appRoutes",
+      "to": "CustomerPickerPage",
+      "kind": "config",
+      "label": "lazy loads /customers"
+    },
+    {
+      "id": "e4",
+      "from": "OrderListPage",
+      "to": "OrderState",
+      "kind": "call",
+      "label": "reads the loaded orders"
+    },
+    {
+      "id": "e5",
+      "from": "OrderListPage",
+      "to": "OrderTable",
+      "kind": "call",
+      "label": "passes the filtered rows down"
+    },
+    {
+      "id": "e6",
+      "from": "OrderTable",
+      "to": "OrderListPage",
+      "kind": "event",
+      "label": "reports open and cancel upwards"
+    },
+    {
+      "id": "e7",
+      "from": "OrderListPage",
+      "to": "PageHeader",
+      "kind": "call",
+      "label": "title and actions"
+    },
+    {
+      "id": "e8",
+      "from": "OrderTable",
+      "to": "DataTable",
+      "kind": "call",
+      "label": "builds on the generic table"
+    },
+    {
+      "id": "e9",
+      "from": "OrderState",
+      "to": "OrderApi",
+      "kind": "call",
+      "label": "loads and cancels orders"
+    },
+    {
+      "id": "e10",
+      "from": "OrderState",
+      "to": "CustomerState",
+      "kind": "call",
+      "label": "resolves the customer names"
+    },
+    {
+      "id": "e11",
+      "from": "CustomerPickerPage",
+      "to": "CustomerState",
+      "kind": "call",
+      "label": "reads the customer list"
+    },
+    {
+      "id": "e12",
+      "from": "CustomerState",
+      "to": "CustomerApi",
+      "kind": "call",
+      "label": "loads all customers once"
+    },
+    {
+      "id": "e13",
+      "from": "OrderApi",
+      "to": "Backend",
+      "kind": "http",
+      "label": "GET and POST /api/orders"
+    },
+    {
+      "id": "e14",
+      "from": "CustomerApi",
+      "to": "Backend",
+      "kind": "http",
+      "label": "GET /api/customers"
+    },
+    {
+      "id": "e15",
+      "from": "authInterceptor",
+      "to": "Backend",
+      "kind": "http",
+      "label": "adds the bearer token"
+    },
+    {
+      "id": "e16",
+      "from": "OrderApi",
+      "to": "Order",
+      "kind": "maps",
+      "label": "returns Order"
+    },
+    {
+      "id": "e17",
+      "from": "OrderState",
+      "to": "Order",
+      "kind": "maps",
+      "label": "holds Order[]"
+    }
+  ],
+  "flows": [
+    {
+      "id": "open-orders",
+      "name": "/orders - open the order list",
+      "entry": "appRoutes#orders",
+      "description": "The read path. The interesting part is that nobody calls a load method: the resource reloads itself because the tenant signal it depends on changed.",
+      "steps": [
+        {
+          "edge": "e1",
+          "note": "guard runs before the bundle is fetched"
+        },
+        {
+          "edge": "e2",
+          "note": "lazy chunk for @acme/orders"
+        },
+        {
+          "edge": "e4",
+          "note": "page reads state.orders()"
+        },
+        {
+          "edge": "e9",
+          "note": "rxResource triggers on the tenant signal"
+        },
+        {
+          "edge": "e15",
+          "note": "adds the bearer token to the request"
+        },
+        {
+          "edge": "e13",
+          "note": "GET /api/orders"
+        },
+        {
+          "edge": "e10",
+          "note": "customer names for the table column"
+        },
+        {
+          "edge": "e5",
+          "note": "filtered rows go down into the table"
+        },
+        {
+          "edge": "e8",
+          "note": "rendered by the generic table"
+        }
+      ]
+    },
+    {
+      "id": "cancel-order",
+      "name": "cancel an order",
+      "entry": "OrderTable#cancel",
+      "description": "A write path with an optimistic update: the row flips first, the request follows, and only an error rolls it back and reloads.",
+      "steps": [
+        {
+          "edge": "e6",
+          "note": "table reports the click upwards"
+        },
+        {
+          "edge": "e4",
+          "note": "page forwards it to the state"
+        },
+        {
+          "edge": "e9",
+          "note": "state flips the row, then calls the api"
+        },
+        {
+          "edge": "e15",
+          "note": "adds the bearer token to the request"
+        },
+        {
+          "edge": "e13",
+          "note": "POST /api/orders/{id}/cancel"
+        },
+        {
+          "edge": "e5",
+          "note": "table re-renders from the changed signal"
+        }
+      ]
+    },
+    {
+      "id": "pick-customer",
+      "name": "/customers - pick a customer",
+      "entry": "appRoutes#customers",
+      "description": "Reachable as a route and as a dialog. The selection is a model() signal, so the caller gets the value back without an output.",
+      "steps": [
+        {
+          "edge": "e3",
+          "note": "lazy chunk for @acme/customers"
+        },
+        {
+          "edge": "e11",
+          "note": "page reads the customer list"
+        },
+        {
+          "edge": "e12",
+          "note": "loaded once per session"
+        },
+        {
+          "edge": "e15",
+          "note": "adds the bearer token to the request"
+        },
+        {
+          "edge": "e14",
+          "note": "GET /api/customers"
+        }
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "f1",
+      "title": "OrderState reaches into the customers feature",
+      "severity": "high",
+      "category": "boundary",
+      "stage": 3,
+      "modules": [
+        "orders",
+        "customers"
+      ],
+      "nodes": [
+        "OrderState",
+        "CustomerState"
+      ],
+      "evidence": "OrderState -> CustomerState, the only edge between the two feature libraries",
+      "detail": "Two feature libraries know each other, so neither can ship without the other. The dependency exists for one thing only: resolving customer names.",
+      "suggestion": "Let the order api return the name, or move the lookup into a shared library both may depend on."
+    },
+    {
+      "id": "f2",
+      "title": "CustomerState loads the full customer list",
+      "severity": "medium",
+      "category": "state",
+      "stage": 2,
+      "nodes": [
+        "CustomerState",
+        "CustomerApi"
+      ],
+      "evidence": "CustomerApi.loadAll(): GET /api/customers, no paging parameter in the signature",
+      "detail": "Fine while the list is short. The picker holds every customer in memory and the first slow render happens without any code change.",
+      "suggestion": "Paging or a search endpoint, before the number decides it for you."
+    },
+    {
+      "id": "f3",
+      "title": "CustomerPickerPage has no organism between page and state",
+      "severity": "low",
+      "category": "layering",
+      "stage": 3,
+      "nodes": [
+        "CustomerPickerPage"
+      ],
+      "evidence": "CustomerPickerPage -> CustomerState directly, while OrderListPage goes through OrderTable",
+      "detail": "The two pages are built differently. Nothing is broken, it just means the picker's markup has nowhere to go when it grows.",
+      "suggestion": "Only worth doing when the page gets its second job."
+    },
+    {
+      "id": "f4",
+      "title": "CustomerApi loads every customer once and nothing invalidates it",
+      "severity": "medium",
+      "category": "state",
+      "stage": 4,
+      "nodes": [
+        "CustomerState",
+        "CustomerApi"
+      ],
+      "evidence": "httpResource in CustomerState, no signal it depends on, 3 journeys read it",
+      "detail": "The list is fetched on first read and kept for the rest of the session. A customer created in another tab is not in it, and no journey re-triggers the resource.",
+      "suggestion": "Give the resource a dependency it can react to, or reload it after the write journeys that change the list."
+    }
+  ]
+}

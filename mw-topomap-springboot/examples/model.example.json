@@ -1,0 +1,737 @@
+{
+  "meta": {
+    "title": "acme-platform",
+    "preset": "spring",
+    "generated": "hand-written example",
+    "language": "en",
+    "notes": "shows every feature of the model format",
+    "stereotypes": {
+      "guard": {
+        "label": "guard",
+        "rank": 0,
+        "icon": "shield",
+        "color": "var(--mw-warning-color)"
+      },
+      "external": {
+        "label": "external",
+        "rank": 5,
+        "icon": "globe",
+        "color": "var(--mw-gray-color)"
+      }
+    },
+    "theme": {
+      "primary": "#1031bb"
+    }
+  },
+  "modules": [
+    {
+      "id": "customer-api",
+      "name": ":customer:api",
+      "path": "customer/api",
+      "description": "REST layer for customers"
+    },
+    {
+      "id": "customer-core",
+      "name": ":customer:core",
+      "path": "customer/core",
+      "description": "customer domain + persistence"
+    },
+    {
+      "id": "tenant-core",
+      "name": ":tenant:core",
+      "path": "tenant/core",
+      "description": "tenant master data"
+    },
+    {
+      "id": "billing-core",
+      "name": ":billing:core",
+      "path": "billing/core",
+      "description": "invoices, reacts to customer events"
+    },
+    {
+      "id": "shared-integration",
+      "name": ":shared:integration",
+      "path": "shared/integration",
+      "description": "outbound HTTP clients"
+    },
+    {
+      "id": "external",
+      "name": "external systems",
+      "description": "systems on the other end of an http edge - not part of the build"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "AuthTokenFilter",
+      "module": "customer-api",
+      "name": "AuthTokenFilter",
+      "stereotype": "guard",
+      "tags": [
+        "OncePerRequestFilter"
+      ],
+      "fqn": "com.acme.customer.api.AuthTokenFilter",
+      "file": "customer/api/src/main/kotlin/com/acme/customer/api/AuthTokenFilter.kt",
+      "summary": "Reads the bearer token off every request into the customer api, resolves the tenant and puts it into the request scope. Registered in SecurityConfig, so it carries no annotation of its own.",
+      "members": [
+        {
+          "name": "doFilterInternal",
+          "signature": "doFilterInternal(request: HttpServletRequest, response: HttpServletResponse, chain: FilterChain)",
+          "doc": "rejects with 401 when the token is missing or expired, otherwise sets the tenant and hands on"
+        }
+      ]
+    },
+    {
+      "id": "CustomerController",
+      "module": "customer-api",
+      "name": "CustomerController",
+      "stereotype": "controller",
+      "fqn": "com.acme.customer.api.CustomerController",
+      "file": "customer/api/src/main/kotlin/com/acme/customer/api/CustomerController.kt",
+      "summary": "HTTP entry point for the customer resource.",
+      "members": [
+        {
+          "name": "getAll",
+          "signature": "getAll(tenantId: UUID, page: Pageable): Page<CustomerResponse>",
+          "http": "GET /api/customers",
+          "doc": "Returns a page of customers for the calling tenant."
+        },
+        {
+          "name": "create",
+          "signature": "create(body: CreateCustomerRequest): CustomerResponse",
+          "http": "POST /api/customers",
+          "doc": "Creates a customer after a credit check."
+        },
+        {
+          "name": "getOne",
+          "signature": "getOne(id: UUID): CustomerResponse",
+          "http": "GET /api/customers/{id}",
+          "doc": "Loads a single customer, 404 when it does not exist."
+        }
+      ]
+    },
+    {
+      "id": "CustomerResponseMapper",
+      "module": "customer-api",
+      "name": "CustomerResponseMapper",
+      "stereotype": "mapper",
+      "fqn": "com.acme.customer.api.CustomerResponseMapper",
+      "summary": "Maps between the domain model and the REST contract.",
+      "members": [
+        {
+          "name": "toResponse",
+          "signature": "toResponse(customer: Customer): CustomerResponse",
+          "doc": "Domain entity to REST response."
+        },
+        {
+          "name": "toCommand",
+          "signature": "toCommand(body: CreateCustomerRequest): CreateCustomerCommand",
+          "doc": "Request body to a domain command."
+        }
+      ]
+    },
+    {
+      "id": "CustomerFacade",
+      "module": "customer-core",
+      "name": "CustomerFacade",
+      "stereotype": "api",
+      "fqn": "com.acme.customer.CustomerFacade",
+      "file": "customer/core/src/main/kotlin/com/acme/customer/CustomerFacade.kt",
+      "summary": "The only entry point other modules are allowed to call.",
+      "members": [
+        {
+          "name": "findAll",
+          "signature": "findAll(tenantId: TenantId, page: Pageable): Page<Customer>",
+          "doc": "Reads all customers of a tenant."
+        },
+        {
+          "name": "create",
+          "signature": "create(command: CreateCustomerCommand): Customer",
+          "doc": "Validates, persists and publishes CustomerCreated."
+        },
+        {
+          "name": "findById",
+          "signature": "findById(id: CustomerId): Customer?",
+          "doc": "Single customer lookup, null when unknown."
+        }
+      ]
+    },
+    {
+      "id": "CustomerService",
+      "module": "customer-core",
+      "name": "CustomerService",
+      "stereotype": "service",
+      "fqn": "com.acme.customer.internal.CustomerService",
+      "summary": "Holds the customer business rules. Package-private to the module.",
+      "members": [
+        {
+          "name": "create",
+          "signature": "create(command: CreateCustomerCommand): Customer",
+          "doc": "Checks the tenant, runs the credit check, saves the customer."
+        },
+        {
+          "name": "findAll",
+          "signature": "findAll(tenantId: TenantId, page: Pageable): Page<Customer>",
+          "doc": "Delegates to the repository, applies tenant filtering."
+        }
+      ]
+    },
+    {
+      "id": "CustomerRepository",
+      "module": "customer-core",
+      "name": "CustomerRepository",
+      "stereotype": "repository",
+      "fqn": "com.acme.customer.internal.CustomerRepository",
+      "summary": "Spring Data JPA repository for Customer.",
+      "members": [
+        {
+          "name": "findAllByTenantId",
+          "signature": "findAllByTenantId(tenantId: UUID, page: Pageable): Page<Customer>",
+          "doc": "Derived query on the tenant column."
+        },
+        {
+          "name": "existsByEmail",
+          "signature": "existsByEmail(email: String): Boolean",
+          "doc": "Uniqueness check before insert."
+        }
+      ]
+    },
+    {
+      "id": "Customer",
+      "module": "customer-core",
+      "name": "Customer",
+      "stereotype": "entity",
+      "fqn": "com.acme.customer.internal.Customer",
+      "table": "customer",
+      "summary": "Aggregate root of the customer module.",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "pk": true
+        },
+        {
+          "name": "tenant_id",
+          "type": "uuid",
+          "fk": true
+        },
+        {
+          "name": "email",
+          "type": "varchar(320)"
+        },
+        {
+          "name": "display_name",
+          "type": "varchar(200)"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz"
+        }
+      ]
+    },
+    {
+      "id": "CustomerAddress",
+      "module": "customer-core",
+      "name": "CustomerAddress",
+      "stereotype": "entity",
+      "table": "customer_address",
+      "summary": "@OneToMany child of Customer.",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "pk": true
+        },
+        {
+          "name": "customer_id",
+          "type": "uuid",
+          "fk": true
+        },
+        {
+          "name": "street",
+          "type": "varchar(200)"
+        },
+        {
+          "name": "city",
+          "type": "varchar(120)"
+        }
+      ]
+    },
+    {
+      "id": "TenantFacade",
+      "module": "tenant-core",
+      "name": "TenantFacade",
+      "stereotype": "api",
+      "fqn": "com.acme.tenant.TenantFacade",
+      "summary": "Public API of the tenant module.",
+      "members": [
+        {
+          "name": "requireActive",
+          "signature": "requireActive(id: TenantId): Tenant",
+          "doc": "Loads the tenant, throws when it is missing or suspended."
+        },
+        {
+          "name": "findAll",
+          "signature": "findAll(): List<Tenant>",
+          "doc": "All tenants, used by batch jobs."
+        }
+      ]
+    },
+    {
+      "id": "TenantRepository",
+      "module": "tenant-core",
+      "name": "TenantRepository",
+      "stereotype": "repository",
+      "summary": "JPA access to tenants.",
+      "members": [
+        {
+          "name": "findByIdAndActiveTrue",
+          "signature": "findByIdAndActiveTrue(id: UUID): Tenant?",
+          "doc": "Only returns tenants that are not suspended."
+        }
+      ]
+    },
+    {
+      "id": "Tenant",
+      "module": "tenant-core",
+      "name": "Tenant",
+      "stereotype": "entity",
+      "table": "tenant",
+      "summary": "Tenant master record.",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "pk": true
+        },
+        {
+          "name": "name",
+          "type": "varchar(200)"
+        },
+        {
+          "name": "active",
+          "type": "boolean"
+        }
+      ]
+    },
+    {
+      "id": "CreditCheckClient",
+      "module": "shared-integration",
+      "name": "CreditCheckClient",
+      "stereotype": "client",
+      "summary": "Calls the external credit scoring API.",
+      "members": [
+        {
+          "name": "score",
+          "signature": "score(email: String): CreditScore",
+          "http": "GET credit.acme.io/score",
+          "doc": "Returns the score, falls back to NEUTRAL on timeout."
+        }
+      ]
+    },
+    {
+      "id": "CustomerCreatedListener",
+      "module": "billing-core",
+      "name": "CustomerCreatedListener",
+      "stereotype": "event",
+      "summary": "Reacts to customer events and opens a billing account.",
+      "members": [
+        {
+          "name": "onCustomerCreated",
+          "signature": "onCustomerCreated(event: CustomerCreated)",
+          "doc": "Creates the initial invoice draft for the new customer."
+        }
+      ]
+    },
+    {
+      "id": "InvoiceService",
+      "module": "billing-core",
+      "name": "InvoiceService",
+      "stereotype": "service",
+      "summary": "Creates and settles invoices.",
+      "members": [
+        {
+          "name": "openDraft",
+          "signature": "openDraft(customerId: CustomerId): Invoice",
+          "doc": "Opens an empty invoice for the current period."
+        }
+      ]
+    },
+    {
+      "id": "InvoiceRepository",
+      "module": "billing-core",
+      "name": "InvoiceRepository",
+      "stereotype": "repository",
+      "summary": "JPA access to invoices.",
+      "members": [
+        {
+          "name": "save",
+          "signature": "save(invoice: Invoice): Invoice",
+          "doc": "Insert or update."
+        }
+      ]
+    },
+    {
+      "id": "Invoice",
+      "module": "billing-core",
+      "name": "Invoice",
+      "stereotype": "entity",
+      "table": "invoice",
+      "summary": "Invoice aggregate.",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "pk": true
+        },
+        {
+          "name": "customer_id",
+          "type": "uuid",
+          "fk": true
+        },
+        {
+          "name": "status",
+          "type": "varchar(20)"
+        },
+        {
+          "name": "total_cents",
+          "type": "bigint"
+        }
+      ]
+    },
+    {
+      "id": "CreditBureau",
+      "module": "external",
+      "name": "Credit Bureau",
+      "stereotype": "external",
+      "tags": [
+        "third party"
+      ],
+      "summary": "The scoring provider CreditCheckClient talks to. Not our code - it is here so the call that leaves the process has an arrow and a name."
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "CustomerController",
+      "to": "CustomerFacade",
+      "kind": "call",
+      "label": "loads customers of the tenant"
+    },
+    {
+      "id": "e2",
+      "from": "CustomerController",
+      "to": "CustomerResponseMapper",
+      "kind": "call",
+      "label": "maps domain to response"
+    },
+    {
+      "id": "e3",
+      "from": "CustomerFacade",
+      "to": "CustomerService",
+      "kind": "call",
+      "label": "delegates to the internal service"
+    },
+    {
+      "id": "e4",
+      "from": "CustomerService",
+      "to": "CustomerRepository",
+      "kind": "call",
+      "label": "reads and writes customers"
+    },
+    {
+      "id": "e5",
+      "from": "CustomerRepository",
+      "to": "Customer",
+      "kind": "persist",
+      "label": "table customer"
+    },
+    {
+      "id": "e6",
+      "from": "Customer",
+      "to": "CustomerAddress",
+      "kind": "persist",
+      "label": "@OneToMany"
+    },
+    {
+      "id": "e7",
+      "from": "CustomerService",
+      "to": "TenantFacade",
+      "kind": "call",
+      "label": "checks that the tenant is active"
+    },
+    {
+      "id": "e8",
+      "from": "TenantFacade",
+      "to": "TenantRepository",
+      "kind": "call",
+      "label": "loads the tenant"
+    },
+    {
+      "id": "e9",
+      "from": "TenantRepository",
+      "to": "Tenant",
+      "kind": "persist",
+      "label": "table tenant"
+    },
+    {
+      "id": "e10",
+      "from": "CustomerService",
+      "to": "CreditCheckClient",
+      "kind": "http",
+      "label": "asks for the credit score"
+    },
+    {
+      "id": "e11",
+      "from": "CustomerFacade",
+      "to": "CustomerCreatedListener",
+      "kind": "event",
+      "label": "publishes CustomerCreated"
+    },
+    {
+      "id": "e12",
+      "from": "CustomerCreatedListener",
+      "to": "InvoiceService",
+      "kind": "call",
+      "label": "opens a draft invoice"
+    },
+    {
+      "id": "e13",
+      "from": "InvoiceService",
+      "to": "InvoiceRepository",
+      "kind": "call",
+      "label": "saves the invoice"
+    },
+    {
+      "id": "e14",
+      "from": "InvoiceRepository",
+      "to": "Invoice",
+      "kind": "persist",
+      "label": "table invoice"
+    },
+    {
+      "id": "e15",
+      "from": "InvoiceService",
+      "to": "CustomerFacade",
+      "kind": "call",
+      "label": "resolves the billing address"
+    },
+    {
+      "id": "e16",
+      "from": "AuthTokenFilter",
+      "to": "CustomerController",
+      "kind": "call",
+      "label": "hands the request on with the tenant resolved"
+    },
+    {
+      "id": "e17",
+      "from": "CreditCheckClient",
+      "to": "CreditBureau",
+      "kind": "http",
+      "label": "asks for the score of the tax id"
+    }
+  ],
+  "flows": [
+    {
+      "id": "get-all-customers",
+      "name": "GET /api/customers",
+      "description": "Die Liste der Kunden eines Mandanten, seitenweise. Der Controller reicht die Tenant-Id durch, gefiltert wird in der Abfrage.",
+      "color": "var(--mw-ink-primary)",
+      "entry": "CustomerController#getAll",
+      "steps": [
+        {
+          "edge": "e16",
+          "note": "checks the token, resolves the tenant"
+        },
+        {
+          "edge": "e1",
+          "note": "controller hands the tenant id over"
+        },
+        {
+          "edge": "e3",
+          "note": "facade delegates"
+        },
+        {
+          "edge": "e4",
+          "note": "page query by tenant"
+        },
+        {
+          "edge": "e5",
+          "note": "select from customer"
+        },
+        {
+          "edge": "e2",
+          "note": "map to response dto"
+        }
+      ]
+    },
+    {
+      "id": "create-customer",
+      "name": "POST /api/customers",
+      "description": "Anlegen mit Mandantenpruefung und externem Credit-Check, danach wird CustomerCreated veroeffentlicht - daran haengt die Rechnungsstellung.",
+      "color": "var(--mw-ink-success)",
+      "entry": "CustomerController#create",
+      "steps": [
+        {
+          "edge": "e16",
+          "note": "checks the token, resolves the tenant"
+        },
+        {
+          "edge": "e2",
+          "note": "request body to command"
+        },
+        {
+          "edge": "e1",
+          "note": "call the module api"
+        },
+        {
+          "edge": "e3",
+          "note": "facade delegates"
+        },
+        {
+          "edge": "e7",
+          "note": "tenant must be active"
+        },
+        {
+          "edge": "e8",
+          "note": "load tenant"
+        },
+        {
+          "edge": "e10",
+          "note": "external credit check"
+        },
+        {
+          "edge": "e17",
+          "note": "blocking call, no timeout, inside the transaction"
+        },
+        {
+          "edge": "e4",
+          "note": "insert customer"
+        },
+        {
+          "edge": "e5",
+          "note": "insert into customer"
+        },
+        {
+          "edge": "e11",
+          "note": "publish CustomerCreated"
+        },
+        {
+          "edge": "e12",
+          "note": "billing opens a draft"
+        },
+        {
+          "edge": "e13",
+          "note": "insert invoice"
+        }
+      ]
+    },
+    {
+      "id": "invoice-run",
+      "name": "nightly invoice run",
+      "description": "Der naechtliche Lauf: Billing holt sich die Kundendaten ueber die Modul-API und schreibt daraus die Rechnung.",
+      "color": "var(--mw-ink-secondary)",
+      "entry": "InvoiceService#openDraft",
+      "steps": [
+        {
+          "edge": "e15",
+          "note": "billing asks customer for data"
+        },
+        {
+          "edge": "e3",
+          "note": "facade delegates"
+        },
+        {
+          "edge": "e4",
+          "note": "load customer"
+        },
+        {
+          "edge": "e13",
+          "note": "write the invoice"
+        },
+        {
+          "edge": "e14",
+          "note": "insert into invoice"
+        }
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "f1",
+      "title": "customer-core and billing-core depend on each other",
+      "severity": "high",
+      "category": "coupling",
+      "stage": 3,
+      "modules": [
+        "customer-core",
+        "billing-core"
+      ],
+      "nodes": [
+        "CustomerFacade",
+        "CustomerCreatedListener",
+        "InvoiceService"
+      ],
+      "evidence": "CustomerFacade -> CustomerCreatedListener (event), InvoiceService -> CustomerFacade (call)",
+      "detail": "The event edge leaves customer-core and the billing address call comes straight back. Neither module can be built, tested or moved without the other.",
+      "suggestion": "Put the billing address on the event payload, so billing never has to call back."
+    },
+    {
+      "id": "f2",
+      "title": "The credit check sits inside the create path",
+      "severity": "medium",
+      "category": "transaction",
+      "stage": 4,
+      "nodes": [
+        "CustomerService",
+        "CreditCheckClient"
+      ],
+      "evidence": "flow create-customer, step 6 of 11: http edge e10 between the tenant check and the insert",
+      "detail": "An outbound call to another system runs between the guard and the write. As long as the credit check is slow, the transaction stays open and the endpoint waits.",
+      "suggestion": "Either pull the check in front of the transaction or move it behind the insert onto the event."
+    },
+    {
+      "id": "f3",
+      "title": "shared-integration has no api class",
+      "severity": "medium",
+      "category": "boundary",
+      "stage": 3,
+      "modules": [
+        "shared-integration"
+      ],
+      "nodes": [
+        "CreditCheckClient"
+      ],
+      "evidence": "CustomerService -> CreditCheckClient, the only class the module exposes",
+      "detail": "Callers reach the client directly, so the module has no surface it could change behind.",
+      "suggestion": "A CreditCheckFacade with the two methods that are actually used."
+    },
+    {
+      "id": "f4",
+      "title": "The scheduled invoice run does not pass the AuthTokenFilter the two endpoints pass",
+      "severity": "medium",
+      "category": "authorization",
+      "stage": 4,
+      "nodes": [
+        "InvoiceService",
+        "AuthTokenFilter"
+      ],
+      "evidence": "2 of 3 flows start at AuthTokenFilter, invoice-run starts at InvoiceService",
+      "detail": "The job runs without a tenant in the request scope, so InvoiceService resolves it from the customer row instead. That is correct today and stops being correct the moment an endpoint triggers the same run.",
+      "suggestion": "Give the job an explicit tenant context of its own rather than borrowing the one the filter would have set."
+    },
+    {
+      "id": "f5",
+      "title": "CreditCheckClient calls the credit bureau with no timeout and no fallback",
+      "severity": "high",
+      "category": "transaction",
+      "stage": 3,
+      "nodes": [
+        "CreditCheckClient",
+        "CreditBureau"
+      ],
+      "evidence": "RestClient built without a request factory, no @Retryable, called inside the create-customer transaction",
+      "detail": "The call sits between two writes of the same transaction, so a slow bureau holds a database connection open for as long as it takes to answer.",
+      "suggestion": "Set a timeout, and move the call out of the transaction - score first, then open it."
+    }
+  ]
+}
